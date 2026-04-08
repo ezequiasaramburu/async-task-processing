@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=.vscode/serverless.schema.json
 service: async-task-processor
 
 provider:
@@ -17,3 +18,51 @@ custom:
     minify: false
     sourcemap: true
     target: node20
+  serverless-dynamodb:
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+  serverless-offline-sqs:
+    autoCreate: true
+    endpoint: http://localhost:9324
+
+resources:
+  Resources:
+    TasksTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: tasks-${sls:stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: taskId
+            AttributeType: S
+          - AttributeName: status
+            AttributeType: S
+        KeySchema:
+          - AttributeName: taskId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: status-index
+            KeySchema:
+              - AttributeName: status
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    TaskDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: task-dlq-${sls:stage}
+
+    TaskQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: task-queue-${sls:stage}
+        VisibilityTimeout: 30
+        RedrivePolicy:
+          maxReceiveCount: 3
+          deadLetterTargetArn:
+            Fn::GetAtt:
+              - TaskDLQ
+              - Arn
