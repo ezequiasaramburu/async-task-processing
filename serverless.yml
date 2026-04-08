@@ -5,6 +5,8 @@ provider:
   name: aws
   runtime: nodejs20.x
   region: us-east-1
+  environment:
+    TASK_QUEUE_NAME: task-queue-${sls:stage}
 
 plugins:
   - serverless-esbuild
@@ -26,6 +28,20 @@ custom:
   serverless-offline-sqs:
     autoCreate: true
     endpoint: http://localhost:9324
+
+functions:
+  submitTask:
+    handler: src/handlers/submitTask.handler
+    events:
+      - http:
+          path: /tasks
+          method: post
+          cors: true
+    environment:
+      TASKS_TABLE:
+        Ref: TasksTable
+      TASK_QUEUE_URL:
+        Ref: TaskQueue
 
 resources:
   Resources:
