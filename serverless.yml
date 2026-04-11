@@ -43,6 +43,20 @@ functions:
       TASK_QUEUE_URL:
         Ref: TaskQueue
 
+  processTask:
+    handler: src/handlers/processTask.handler
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - TaskQueue
+              - Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+    environment:
+      TASKS_TABLE:
+        Ref: TasksTable
+
 resources:
   Resources:
     TasksTable:
