@@ -1,13 +1,19 @@
 # yaml-language-server: $schema=.vscode/serverless.schema.json
 service: async-task-processor
 
+# Loads `.env` when present so `${env:...}` resolves for local runs (`sls offline`, `sls deploy` from a laptop).
+# In CI for production, omit `.env` and set `IS_OFFLINE=false` (or rely on the default below).
+useDotenv: true
+
 provider:
   name: aws
   runtime: nodejs20.x
   region: us-east-1
   stage: ${opt:stage, 'dev'}
   environment:
-    TASK_QUEUE_NAME: task-queue-${self:provider.stage}
+    TASKS_TABLE: tasks-${self:provider.stage}
+    DYNAMODB_ENDPOINT: ${env:DYNAMODB_ENDPOINT, ''}
+    SQS_ENDPOINT: ${env:SQS_ENDPOINT, ''}
 
 plugins:
   - serverless-esbuild
@@ -27,14 +33,13 @@ custom:
       inMemory: true
       migrate: true
       noStart: true
-      docker: true
 
   serverless-offline-sqs:
     autoCreate: false
-    endpoint: http://localhost:9324
-    region: us-east-1
-    accessKeyId: local
-    secretAccessKey: local
+    endpoint: ${env:SQS_ENDPOINT}
+    region: ${self:provider.region}
+    accessKeyId: ${env:AWS_ACCESS_KEY_ID, 'local'}
+    secretAccessKey: ${env:AWS_SECRET_ACCESS_KEY, 'local'}
 
 functions:
   submitTask:
@@ -45,9 +50,9 @@ functions:
           method: post
           cors: true
     environment:
-      TASKS_TABLE: tasks-${self:provider.stage}
       TASK_QUEUE_URL:
         Ref: TaskQueue
+      LOCAL_TASK_QUEUE_URL: ${env:LOCAL_TASK_QUEUE_URL, ''}
 
   processTask:
     handler: src/handlers/processTask.handler
@@ -59,8 +64,6 @@ functions:
               - Arn
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
-    environment:
-      TASKS_TABLE: tasks-${self:provider.stage}
 
   getTask:
     handler: src/handlers/getTask.handler
@@ -69,8 +72,6 @@ functions:
           path: /tasks/{taskId}
           method: get
           cors: true
-    environment:
-      TASKS_TABLE: tasks-${self:provider.stage}
 
 resources:
   Resources:

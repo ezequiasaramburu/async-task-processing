@@ -3,39 +3,39 @@ import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 
 import { Task, TaskStatus } from "./types";
 
-const isOffline = process.env.IS_OFFLINE === "true";
-const tableName = process.env.TASKS_TABLE;
+let _client: DynamoDBClient | null = null;
 
-if (!tableName) {
-  throw new Error("TASKS_TABLE environment variable is required");
-}
+const getClient = (): DynamoDBClient => {
+  if (!_client) {
+    const isOffline = process.env.IS_OFFLINE === "true";
+    _client = new DynamoDBClient(
+      isOffline ? { endpoint: process.env.DYNAMODB_ENDPOINT } : {}
+    );
+  }
+  return _client;
+};
 
-const client = new DynamoDBClient(
-  isOffline
-    ? {
-        endpoint: "http://localhost:8000",
-        region: "us-east-1",
-        credentials: {
-          accessKeyId: "fakeMyKeyId",
-          secretAccessKey: "fakeSecretAccessKey",
-        },
-      }
-    : {},
-);
+const getTableName = (): string => {
+  const name = process.env.TASKS_TABLE;
+  if (!name) {
+    throw new Error("TASKS_TABLE environment variable is required");
+  }
+  return name;
+};
 
 export const putTask = async (task: Task): Promise<void> => {
-  await client.send(
+  await getClient().send(
     new PutItemCommand({
-      TableName: tableName,
+      TableName: getTableName(),
       Item: marshall(task, { removeUndefinedValues: true }),
     }),
   );
 };
 
 export const getTask = async (taskId: string): Promise<Task | null> => {
-  const result = await client.send(
+  const result = await getClient().send(
     new GetItemCommand({
-      TableName: tableName,
+      TableName: getTableName(),
       Key: marshall({ taskId }),
     }),
   );
@@ -80,9 +80,9 @@ export const updateTaskStatus = async (
     setExpressions.push("#failureReason = :failureReason");
   }
 
-  await client.send(
+  await getClient().send(
     new UpdateItemCommand({
-      TableName: tableName,
+      TableName: getTableName(),
       Key: marshall({ taskId }),
       UpdateExpression: `SET ${setExpressions.join(", ")}`,
       ExpressionAttributeNames: names,
