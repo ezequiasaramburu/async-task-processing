@@ -2,6 +2,7 @@ import type { SQSBatchResponse, SQSHandler } from "aws-lambda";
 
 import { getTask, updateTaskStatus } from "../lib/dynamo";
 import { log } from "../lib/logger";
+import { enqueueTask } from "../lib/sqs";
 import { TaskStatus } from "../lib/types";
 
 const sleep = (ms: number): Promise<void> =>
@@ -17,12 +18,14 @@ export const handler: SQSHandler = async (event): Promise<SQSBatchResponse> => {
 
   for (const record of event.Records) {
     let taskId: string;
+    let payload: Record<string, unknown>;
     try {
-      const body = JSON.parse(record.body) as { taskId?: string };
+      const body = JSON.parse(record.body) as { taskId?: string; payload?: Record<string, unknown> };
       if (typeof body.taskId !== "string" || body.taskId.length === 0) {
         throw new Error("missing or invalid taskId in message body");
       }
       taskId = body.taskId;
+      payload = body.payload ?? {};
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       log("error", "invalid SQS message body", { reason });
@@ -48,8 +51,8 @@ export const handler: SQSHandler = async (event): Promise<SQSBatchResponse> => {
 
     if (retryCount < 2) {
       await updateTaskStatus(taskId, TaskStatus.PENDING, { retryCount: retryCount + 1 });
+      await enqueueTask(taskId, payload);
       log("warn", "task failed, will retry", { taskId, attempt: retryCount + 1 });
-      batchItemFailures.push({ itemIdentifier: record.messageId });
       continue;
     }
 

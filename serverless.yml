@@ -64,6 +64,10 @@ functions:
               - Arn
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
+    environment:
+      TASK_QUEUE_URL:
+        Ref: TaskQueue
+      LOCAL_TASK_QUEUE_URL: ${env:LOCAL_TASK_QUEUE_URL, ''}
 
   getTask:
     handler: src/handlers/getTask.handler
