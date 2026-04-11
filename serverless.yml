@@ -57,6 +57,17 @@ functions:
       TASKS_TABLE:
         Ref: TasksTable
 
+  getTask:
+    handler: src/handlers/getTask.handler
+    events:
+      - http:
+          path: /tasks/{taskId}
+          method: get
+          cors: true
+    environment:
+      TASKS_TABLE:
+        Ref: TasksTable
+
 resources:
   Resources:
     TasksTable:
