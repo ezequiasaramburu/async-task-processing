@@ -9,7 +9,6 @@ A serverless asynchronous task processing service built on AWS. Tasks are submit
 - AWS CLI (for deployment only)
 - Serverless Framework v3 (`npm install -g serverless@3` + `sls login`)
 
-
 ## How to Run Locally
 
 1. Copy the environment file and start local services:
@@ -34,6 +33,7 @@ curl -X POST http://localhost:3000/dev/tasks \
 ```
 
 Expected response (HTTP 202):
+
 ```json
 { "taskId": "test-001", "status": "PENDING" }
 ```
@@ -80,10 +80,9 @@ All infrastructure is defined in `serverless.yml` (DynamoDB table, SQS queue, DL
 
 Retries are handled through a combination of SQS and application-level tracking:
 
-- When a task fails, its `retryCount` is incremented in DynamoDB and the task is set back to `PENDING`.
-- The handler returns the failed message ID via `SQSBatchResponse.batchItemFailures`, signaling SQS to re-deliver it after the visibility timeout (30s).
-- If `retryCount >= 2`, the task is marked as `FAILED` with a `failureReason` and is **not** reported as a batch failure — SQS removes the message normally.
-- The SQS queue has a `RedrivePolicy` with `maxReceiveCount: 3`. If the handler crashes or times out (unexpected failures), SQS moves the message to the Dead Letter Queue after 3 delivery attempts.
+- When a task fails, its `retryCount` is incremented in DynamoDB, the task is set back to `PENDING`, and a new message is enqueued to SQS for retry.
+- If `retryCount >= 2`, the task is marked as `FAILED` with a `failureReason` — no re-enqueue happens.
+- The SQS queue has a `RedrivePolicy` with `maxReceiveCount: 3`. If the handler crashes or times out (unexpected failures), SQS moves the message to the Dead Letter Queue.
 
 In short: expected failures are tracked in DynamoDB and resolved gracefully. Unexpected failures are caught by the DLQ.
 
