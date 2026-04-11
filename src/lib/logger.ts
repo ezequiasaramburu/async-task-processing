@@ -10,6 +10,7 @@ interface LogMeta {
 export const log = (level: LogLevel, message: string, meta: LogMeta = {}): void => {
   console.log(
     JSON.stringify({
+      timestamp: new Date().toISOString(),
       level,
       message,
       ...meta,
