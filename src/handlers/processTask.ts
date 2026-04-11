@@ -1,4 +1,4 @@
-import type { SQSHandler } from "aws-lambda";
+import type { SQSBatchResponse, SQSHandler } from "aws-lambda";
 
 import { getTask, updateTaskStatus } from "../lib/dynamo";
 import { log } from "../lib/logger";
@@ -12,7 +12,9 @@ const sleep = (ms: number): Promise<void> =>
 const randomIntInclusive = (min: number, max: number): number =>
   min + Math.floor(Math.random() * (max - min + 1));
 
-export const handler: SQSHandler = async (event) => {
+export const handler: SQSHandler = async (event): Promise<SQSBatchResponse> => {
+  const batchItemFailures: { itemIdentifier: string }[] = [];
+
   for (const record of event.Records) {
     let taskId: string;
     try {
@@ -24,7 +26,8 @@ export const handler: SQSHandler = async (event) => {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       log("error", "invalid SQS message body", { reason });
-      throw err;
+      batchItemFailures.push({ itemIdentifier: record.messageId });
+      continue;
     }
 
     log("info", "task processing started", { taskId });
@@ -46,7 +49,8 @@ export const handler: SQSHandler = async (event) => {
     if (retryCount < 2) {
       await updateTaskStatus(taskId, TaskStatus.PENDING, { retryCount: retryCount + 1 });
       log("warn", "task failed, will retry", { taskId, attempt: retryCount + 1 });
-      throw new Error("simulated task failure");
+      batchItemFailures.push({ itemIdentifier: record.messageId });
+      continue;
     }
 
     await updateTaskStatus(taskId, TaskStatus.FAILED, {
@@ -54,4 +58,6 @@ export const handler: SQSHandler = async (event) => {
     });
     log("error", "task permanently failed", { taskId });
   }
+
+  return { batchItemFailures };
 };
